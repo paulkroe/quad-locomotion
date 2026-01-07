@@ -1,0 +1,29 @@
+{
+  "robot_xml_path": "/home/paul/Documents/quad-locomotion/mujoco_menagerie/unitree_go2/go2.xml",
+  "terrain_xml_path": "/home/paul/Documents/quad-locomotion/generated_scenes/training_terrain.xml",
+  "num_envs": 4,
+  "total_timesteps": 10000,
+  "seed": 42,
+  "env_config": {
+    "sim_dt": 0.002,
+    "control_dt": 0.02,
+    "kp": 40.0,
+    "kd": 1.0,
+    "action_scale": 0.5
+  },
+  "policy_config": {
+    "hidden_dims": [
+      256,
+      256,
+      256
+    ],
+    "activation": "elu"
+  },
+  "ppo_config": {
+    "learning_rate": 0.0003,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "num_epochs": 5
+  }
+}

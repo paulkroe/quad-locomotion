@@ -1,0 +1,343 @@
+"""
+HTML viewer client for the stream server.
+"""
+
+def create_viewer_html(
+    ws_url: str = "ws://localhost:8765",
+    title: str = "Quad Locomotion Viewer",
+) -> str:
+    """
+    Create HTML page for viewing the simulation stream.
+    
+    Args:
+        ws_url: WebSocket server URL
+        title: Page title
+        
+    Returns:
+        HTML string
+    """
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            background: #1a1a2e;
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }}
+        
+        h1 {{
+            margin-bottom: 20px;
+            color: #4ecca3;
+        }}
+        
+        .container {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+        }}
+        
+        .video-container {{
+            background: #16213e;
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }}
+        
+        #frame {{
+            display: block;
+            max-width: 100%;
+            border-radius: 8px;
+        }}
+        
+        .status {{
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }}
+        
+        .stat {{
+            background: #16213e;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        
+        .stat-value {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #4ecca3;
+        }}
+        
+        .stat-label {{
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }}
+        
+        .connection-status {{
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }}
+        
+        .connected {{
+            background: #1b4332;
+            color: #4ecca3;
+        }}
+        
+        .disconnected {{
+            background: #5c1a1a;
+            color: #ff6b6b;
+        }}
+        
+        .connecting {{
+            background: #3d3d00;
+            color: #ffd93d;
+        }}
+        
+        .controls {{
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }}
+        
+        button {{
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }}
+        
+        button:hover {{
+            background: #3eb489;
+        }}
+        
+        button:disabled {{
+            background: #555;
+            cursor: not-allowed;
+        }}
+        
+        .metadata {{
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 150px;
+            overflow-y: auto;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 {title}</h1>
+        
+        <span id="connectionStatus" class="connection-status disconnected">
+            Disconnected
+        </span>
+        
+        <div class="video-container">
+            <img id="frame" src="" alt="Simulation view" width="640" height="480">
+        </div>
+        
+        <div class="status">
+            <div class="stat">
+                <div class="stat-value" id="fps">0</div>
+                <div class="stat-label">FPS</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="latency">0</div>
+                <div class="stat-label">Latency (ms)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="frames">0</div>
+                <div class="stat-label">Frames</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="bandwidth">0</div>
+                <div class="stat-label">KB/s</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+        
+        <div class="metadata" id="metadata">
+            Waiting for simulation data...
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = "{ws_url}";
+        
+        let ws = null;
+        let frameCount = 0;
+        let bytesReceived = 0;
+        let lastFrameTime = 0;
+        let fpsHistory = [];
+        let startTime = 0;
+        
+        const frameImg = document.getElementById('frame');
+        const statusEl = document.getElementById('connectionStatus');
+        const fpsEl = document.getElementById('fps');
+        const latencyEl = document.getElementById('latency');
+        const framesEl = document.getElementById('frames');
+        const bandwidthEl = document.getElementById('bandwidth');
+        const metadataEl = document.getElementById('metadata');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        
+        function setStatus(status, text) {{
+            statusEl.className = 'connection-status ' + status;
+            statusEl.textContent = text;
+        }}
+        
+        function connect() {{
+            if (ws) return;
+            
+            setStatus('connecting', 'Connecting...');
+            connectBtn.disabled = true;
+            
+            try {{
+                ws = new WebSocket(WS_URL);
+                
+                ws.onopen = () => {{
+                    setStatus('connected', 'Connected');
+                    disconnectBtn.disabled = false;
+                    startTime = performance.now();
+                    frameCount = 0;
+                    bytesReceived = 0;
+                }};
+                
+                ws.onclose = () => {{
+                    setStatus('disconnected', 'Disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    ws = null;
+                }};
+                
+                ws.onerror = (error) => {{
+                    console.error('WebSocket error:', error);
+                    setStatus('disconnected', 'Connection Error');
+                    connectBtn.disabled = false;
+                    ws = null;
+                }};
+                
+                ws.onmessage = (event) => {{
+                    const now = performance.now();
+                    bytesReceived += event.data.length;
+                    
+                    try {{
+                        const msg = JSON.parse(event.data);
+                        
+                        if (msg.type === 'frame') {{
+                            // Display frame
+                            frameImg.src = 'data:image/jpeg;base64,' + msg.data;
+                            
+                            // Calculate FPS
+                            if (lastFrameTime > 0) {{
+                                const delta = now - lastFrameTime;
+                                const instantFps = 1000 / delta;
+                                fpsHistory.push(instantFps);
+                                if (fpsHistory.length > 30) fpsHistory.shift();
+                                const avgFps = fpsHistory.reduce((a, b) => a + b) / fpsHistory.length;
+                                fpsEl.textContent = avgFps.toFixed(1);
+                            }}
+                            lastFrameTime = now;
+                            
+                            // Calculate latency
+                            if (msg.timestamp) {{
+                                const serverTime = msg.timestamp * 1000;
+                                const latency = now - serverTime;
+                                latencyEl.textContent = Math.max(0, latency).toFixed(0);
+                            }}
+                            
+                            // Update frame count
+                            frameCount++;
+                            framesEl.textContent = frameCount;
+                            
+                            // Calculate bandwidth
+                            const elapsed = (now - startTime) / 1000;
+                            const kbps = (bytesReceived / 1024) / elapsed;
+                            bandwidthEl.textContent = kbps.toFixed(1);
+                            
+                            // Update metadata
+                            if (msg.metadata) {{
+                                metadataEl.textContent = JSON.stringify(msg.metadata, null, 2);
+                            }}
+                        }}
+                        else if (msg.type === 'info') {{
+                            metadataEl.textContent = 'Server info: ' + JSON.stringify(msg, null, 2);
+                        }}
+                    }} catch (e) {{
+                        console.error('Error parsing message:', e);
+                    }}
+                }};
+            }} catch (e) {{
+                console.error('Failed to connect:', e);
+                setStatus('disconnected', 'Failed to connect');
+                connectBtn.disabled = false;
+            }}
+        }}
+        
+        function disconnect() {{
+            if (ws) {{
+                ws.close();
+                ws = null;
+            }}
+        }}
+        
+        // Auto-connect on load
+        setTimeout(connect, 500);
+    </script>
+</body>
+</html>
+'''
+
+
+def save_viewer_html(
+    filepath: str = "viewer.html",
+    ws_url: str = "ws://localhost:8765",
+    title: str = "Quad Locomotion Viewer",
+):
+    """
+    Save the viewer HTML to a file.
+    
+    Args:
+        filepath: Output path
+        ws_url: WebSocket server URL  
+        title: Page title
+    """
+    html = create_viewer_html(ws_url, title)
+    with open(filepath, 'w') as f:
+        f.write(html)
+    print(f"Viewer saved to: {filepath}")
+    print(f"Open this file in a browser to view the stream")

@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quadruped-env"
+version = "0.1.0"
+description = "Quadruped locomotion environment for MuJoCo with terrain generation and curriculum learning"
+readme = "quadruped_env/README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Quad Locomotion Team"}
+]
+keywords = ["reinforcement-learning", "mujoco", "quadruped", "locomotion", "robotics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "numpy>=1.21",
+    "mujoco>=3.0",
+    "pillow>=9.0",
+    "cloudpickle>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+vis = [
+    "websockets>=10.0",
+    "opencv-python>=4.5",
+    "matplotlib>=3.5",
+]
+train = [
+    "torch>=2.0",
+]
+all = [
+    "quadruped-env[dev,vis,train]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["env_backend*", "training*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
